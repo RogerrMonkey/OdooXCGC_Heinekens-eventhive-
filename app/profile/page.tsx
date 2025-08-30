@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import TicketManager from '@/components/TicketManager'
 
 interface User {
   id: string
@@ -153,29 +154,6 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Header */}
-      <header className="bg-white/90 backdrop-blur-md shadow-lg border-b border-gray-100 sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            EventHive
-          </Link>
-          <nav className="hidden md:flex space-x-8">
-            <Link href="/events" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
-              Browse Events
-            </Link>
-            <Link href="/create-event" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
-              Create Event
-            </Link>
-            <Link href="/dashboard" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
-              Dashboard
-            </Link>
-            <Link href="/profile" className="text-blue-600 font-semibold">
-              Profile
-            </Link>
-          </nav>
-        </div>
-      </header>
-
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           {/* Profile Header */}
@@ -337,13 +315,21 @@ export default function ProfilePage() {
                       </div>
                     </div>
 
-                    <div className="flex justify-end mt-4">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-6 pt-4 border-t border-gray-100 gap-4">
                       <Link 
                         href={`/events/${booking.eventId}`}
                         className="text-blue-600 hover:text-blue-700 font-semibold transition-colors"
                       >
                         View Event →
                       </Link>
+                      
+                      {/* Integrated Ticket Management */}
+                      <div className="w-full sm:w-auto">
+                        <TicketManager 
+                          bookingId={booking.bookingId}
+                          className="w-full sm:w-auto"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}

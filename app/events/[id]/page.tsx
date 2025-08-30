@@ -52,12 +52,53 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [couponLoading, setCouponLoading] = useState(false)
   const [showBookingModal, setShowBookingModal] = useState(false)
   const [razorpayLoaded, setRazorpayLoaded] = useState(false)
+  const [razorpayError, setRazorpayError] = useState(false)
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null)
   const [discountAmount, setDiscountAmount] = useState(0)
 
   useEffect(() => {
     fetchEvent()
+    
+    // Debug Razorpay loading
+    console.log('Page loaded, checking Razorpay status...')
+    console.log('Razorpay loaded:', razorpayLoaded)
+    console.log('Razorpay available:', typeof window !== 'undefined' ? !!(window as any).Razorpay : 'window not available')
   }, [resolvedParams.id])
+
+  // Check if Razorpay is already loaded (in case script was loaded previously)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).Razorpay) {
+      setRazorpayLoaded(true)
+    }
+  }, [])
+
+  // Fallback script loading if Next.js Script component fails
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!razorpayLoaded && !razorpayError && typeof window !== 'undefined') {
+        // Try manual script loading as fallback
+        if (!(window as any).Razorpay) {
+          console.log('Attempting manual Razorpay script loading...')
+          const script = document.createElement('script')
+          script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+          script.onload = () => {
+            console.log('Razorpay script loaded manually')
+            setRazorpayLoaded(true)
+            setRazorpayError(false)
+          }
+          script.onerror = () => {
+            console.error('Manual Razorpay script loading failed')
+            setRazorpayError(true)
+          }
+          document.head.appendChild(script)
+        } else {
+          setRazorpayLoaded(true)
+        }
+      }
+    }, 3000) // Wait 3 seconds before attempting manual load
+
+    return () => clearTimeout(timer)
+  }, [razorpayLoaded, razorpayError])
 
   const validateCoupon = async () => {
     if (!couponCode.trim() || !selectedTicketData) return
@@ -202,59 +243,127 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
       const data = await response.json()
       
-      if (data.ok) {
+      if (data.success) {
         // Create payment order
         const paymentResponse = await fetch('/api/payments/create-order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            amount: data.totalAmount,
-            receipt: `booking_${data.booking.bookingId}`
+            amount: data.pricing.totalAmount,
+            receipt: `booking_${data.bookingId}`,
+            bookingId: data.bookingId,
+            notes: {
+              eventTitle: event.title,
+              ticketType: selectedTicketData?.name,
+              quantity: quantity
+            }
           })
         })
 
         const paymentData = await paymentResponse.json()
         
-        if (paymentData.id) {
+        if (paymentData.success) {
           // Initialize Razorpay
           const options = {
             key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-            amount: paymentData.amount,
-            currency: paymentData.currency,
+            amount: paymentData.order.amount,
+            currency: paymentData.order.currency,
             name: 'EventHive',
             description: `Booking for ${event.title}`,
-            order_id: paymentData.id,
-            handler: function (response: any) {
-              // Payment successful
-              alert('Payment successful! Check your email for the ticket.')
-              router.push('/dashboard')
+            order_id: paymentData.order.id,
+            handler: async function (response: any) {
+              try {
+                // Verify payment on server
+                const verifyResponse = await fetch('/api/payments/verify', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature: response.razorpay_signature,
+                    bookingId: data.bookingId
+                  })
+                })
+
+                const verifyData = await verifyResponse.json()
+                
+                if (verifyData.success) {
+                  alert('Payment successful! Check your email for the ticket.')
+                  router.push('/dashboard')
+                } else {
+                  alert('Payment verification failed. Please contact support.')
+                  console.error('Payment verification failed:', verifyData)
+                }
+              } catch (error) {
+                console.error('Payment verification error:', error)
+                alert('Payment verification failed. Please contact support.')
+              }
             },
             prefill: {
               name: localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!).name : '',
               email: localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!).email : '',
             },
-            notes: {
-              bookingId: data.booking.bookingId
-            },
+            notes: paymentData.order.notes,
             theme: {
               color: '#2563eb'
+            },
+            modal: {
+              ondismiss: function() {
+                console.log('Payment cancelled by user')
+                setBookingLoading(false)
+                setShowBookingModal(false)
+              }
             }
           }
 
-          if (!razorpayLoaded || !(window as any).Razorpay) {
-            alert('Payment system is loading. Please try again in a moment.')
+          // Check if Razorpay is available and wait if not
+          const checkRazorpayAvailability = () => {
+            return new Promise<boolean>((resolve) => {
+              let attempts = 0
+              const maxAttempts = 20 // Wait up to 10 seconds
+              
+              const checkInterval = setInterval(() => {
+                attempts++
+                
+                if ((window as any).Razorpay) {
+                  clearInterval(checkInterval)
+                  setRazorpayLoaded(true)
+                  resolve(true)
+                } else if (attempts >= maxAttempts) {
+                  clearInterval(checkInterval)
+                  setRazorpayError(true)
+                  resolve(false)
+                }
+              }, 500)
+            })
+          }
+
+          if (!razorpayLoaded && !(window as any).Razorpay) {
+            console.log('Waiting for Razorpay to load...')
+            const isAvailable = await checkRazorpayAvailability()
+            
+            if (!isAvailable) {
+              alert('Failed to load payment system. Please refresh the page and try again.')
+              return
+            }
+          }
+
+          if (!(window as any).Razorpay) {
+            alert('Payment system not available. Please refresh the page and try again.')
             return
           }
 
           const rzp = new (window as any).Razorpay(options)
           rzp.open()
+        } else {
+          alert(paymentData.message || 'Failed to create payment order')
         }
       } else {
-        alert(data.error || 'Booking failed')
+        alert(data.message || data.error || 'Booking failed')
       }
     } catch (error) {
       console.error('Booking error:', error)
-      alert('Booking failed')
+      alert('Booking failed. Please try again.')
     } finally {
       setBookingLoading(false)
       setShowBookingModal(false)
@@ -293,32 +402,19 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     <>
       <Script
         src="https://checkout.razorpay.com/v1/checkout.js"
-        onLoad={() => setRazorpayLoaded(true)}
+        onLoad={() => {
+          console.log('Razorpay script loaded successfully')
+          setRazorpayLoaded(true)
+          setRazorpayError(false)
+        }}
         onError={(e) => {
           console.error('Failed to load Razorpay script:', e)
+          setRazorpayLoaded(false)
+          setRazorpayError(true)
         }}
+        strategy="beforeInteractive"
       />
       <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="text-2xl font-bold text-blue-600">
-            EventHive
-          </Link>
-          <nav className="space-x-6">
-            <Link href="/events" className="text-gray-600 hover:text-blue-600">
-              Browse Events
-            </Link>
-            <Link href="/create-event" className="text-gray-600 hover:text-blue-600">
-              Create Event
-            </Link>
-            <Link href="/dashboard" className="text-gray-600 hover:text-blue-600">
-              Dashboard
-            </Link>
-          </nav>
-        </div>
-      </header>
-
       <div className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Event Details */}
@@ -594,13 +690,63 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         )}
                       </div>
 
+                      {/* Development Debug Info */}
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                          <h4 className="text-sm font-medium mb-2">Debug Info:</h4>
+                          <div className="text-xs space-y-1">
+                            <p>Razorpay Loaded: {razorpayLoaded ? '✅' : '❌'}</p>
+                            <p>Razorpay Error: {razorpayError ? '❌' : '✅'}</p>
+                            <p>Razorpay Available: {typeof window !== 'undefined' && (window as any).Razorpay ? '✅' : '❌'}</p>
+                            <button
+                              onClick={() => {
+                                console.log('Manual Razorpay check...')
+                                console.log('window.Razorpay:', (window as any).Razorpay)
+                                if ((window as any).Razorpay) {
+                                  setRazorpayLoaded(true)
+                                  setRazorpayError(false)
+                                  alert('Razorpay is available!')
+                                } else {
+                                  alert('Razorpay not available')
+                                }
+                              }}
+                              className="mt-2 px-2 py-1 bg-gray-200 text-xs rounded"
+                            >
+                              Force Check Razorpay
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Payment System Status */}
+                      {!razorpayLoaded && !razorpayError && (
+                        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <div className="flex items-center text-yellow-700">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600 mr-2"></div>
+                            <span className="text-sm">Loading payment system...</span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {razorpayError && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <div className="flex items-center text-red-700">
+                            <span className="text-lg mr-2">⚠️</span>
+                            <span className="text-sm">Payment system failed to load. Please refresh the page.</span>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Book Now Button */}
                       <button
                         onClick={() => setShowBookingModal(true)}
-                        disabled={bookingLoading}
+                        disabled={bookingLoading || (!razorpayLoaded && !razorpayError)}
                         className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 font-semibold"
                       >
-                        {bookingLoading ? 'Processing...' : 'Book Now'}
+                        {bookingLoading ? 'Processing...' : 
+                         !razorpayLoaded && !razorpayError ? 'Loading Payment System...' : 
+                         razorpayError ? 'Payment System Error' :
+                         'Book Now'}
                       </button>
                     </>
                   )}

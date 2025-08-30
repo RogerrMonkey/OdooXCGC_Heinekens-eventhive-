@@ -279,29 +279,6 @@ export default function EventsPage() {
 
   return (
     <div className="min-h-screen bg-neutral-50">
-      {/* Header */}
-      <header className="bg-white/90 backdrop-blur-xl shadow-sm border-b border-neutral-200">
-        <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-          <Link href="/" className="text-2xl font-bold text-primary-600 hover:text-primary-700 transition-colors">
-            EventHive
-          </Link>
-          <nav className="space-x-8">
-            <Link href="/events" className="text-primary-600 font-semibold border-b-2 border-primary-600 pb-1">
-              Browse Events
-            </Link>
-            <Link href="/create-event" className="text-neutral-600 hover:text-primary-600 transition-colors font-medium">
-              Create Event
-            </Link>
-            <Link href="/dashboard" className="text-neutral-600 hover:text-primary-600 transition-colors font-medium">
-              Dashboard
-            </Link>
-            <Link href="/auth" className="btn btn-primary shadow-lg hover:shadow-xl">
-              Login
-            </Link>
-          </nav>
-        </div>
-      </header>
-
       <div className="container mx-auto px-6 py-12">
         {/* Hero Section */}
         <div className="text-center mb-12 fade-in">

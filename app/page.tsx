@@ -84,29 +84,6 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-          <Link href="/" className="text-3xl font-bold text-blue-600 hover:text-blue-700 transition-colors">
-            EventHive
-          </Link>
-          <nav className="hidden md:flex space-x-8">
-            <Link href="/events" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
-              Browse Events
-            </Link>
-            <Link href="/create-event" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
-              Create Event
-            </Link>
-            <Link href="/dashboard" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
-              Dashboard
-            </Link>
-            <Link href="/auth" className="bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-md hover:shadow-lg">
-              Login
-            </Link>
-          </nav>
-        </div>
-      </header>
-
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.1),transparent_70%)]"></div>

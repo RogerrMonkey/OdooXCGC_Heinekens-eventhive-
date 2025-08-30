@@ -12,6 +12,32 @@ export default function AuthPage() {
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
+  const [isTestMode, setIsTestMode] = useState(false)
+
+  const quickTestLogin = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch('/api/test/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create-test-user'
+        })
+      })
+      
+      const data = await response.json()
+      if (data.success) {
+        localStorage.setItem('token', data.token)
+        localStorage.setItem('user', JSON.stringify(data.user))
+        router.push('/events')
+      } else {
+        alert('Test login failed')
+      }
+    } catch (error) {
+      alert('Error during test login')
+    }
+    setLoading(false)
+  }
 
   const sendOTP = async () => {
     if (!target) return
@@ -106,6 +132,33 @@ export default function AuthPage() {
         </div>
 
         <div className="bg-white p-8 rounded-lg shadow-lg">
+          {/* Test Mode Toggle */}
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-yellow-800">🧪 Test Mode</span>
+              <button
+                onClick={() => setIsTestMode(!isTestMode)}
+                className="text-sm text-yellow-700 hover:text-yellow-900 underline"
+              >
+                {isTestMode ? 'Hide' : 'Show'} Quick Login
+              </button>
+            </div>
+            {isTestMode && (
+              <div className="mt-3">
+                <button
+                  onClick={quickTestLogin}
+                  disabled={loading}
+                  className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50"
+                >
+                  {loading ? 'Creating...' : '⚡ Quick Login (Test User)'}
+                </button>
+                <p className="text-xs text-yellow-700 mt-2">
+                  Creates a test user and logs you in instantly for payment testing
+                </p>
+              </div>
+            )}
+          </div>
+
           {step === 'input' ? (
             <div className="space-y-6">
               {/* Method Selection */}

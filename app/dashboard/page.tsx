@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import TicketManager from '@/components/TicketManager'
 
 interface User {
   id: string
@@ -109,32 +110,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="text-2xl font-bold text-blue-600">
-            EventHive
-          </Link>
-          <div className="flex items-center space-x-6">
-            <Link href="/events" className="text-gray-600 hover:text-blue-600">
-              Browse Events
-            </Link>
-            <Link href="/create-event" className="text-gray-600 hover:text-blue-600">
-              Create Event
-            </Link>
-            <div className="flex items-center space-x-3">
-              <span className="text-gray-600">Hi, {user.name || 'User'}</span>
-              <button 
-                onClick={logout}
-                className="text-gray-600 hover:text-red-600"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
       <div className="container mx-auto px-4 py-8">
         <div className="flex gap-8">
           {/* Sidebar */}
@@ -384,13 +359,11 @@ export default function DashboardPage() {
                             {booking.status}
                           </span>
                           {booking.status === 'CONFIRMED' && (
-                            <div className="mt-2 space-y-1">
-                              <button className="block text-xs text-blue-600 hover:text-blue-700">
-                                Download Ticket
-                              </button>
-                              <button className="block text-xs text-green-600 hover:text-green-700">
-                                View QR Code
-                              </button>
+                            <div className="mt-3">
+                              <TicketManager 
+                                bookingId={booking.bookingId}
+                                className="text-xs"
+                              />
                             </div>
                           )}
                         </div>
