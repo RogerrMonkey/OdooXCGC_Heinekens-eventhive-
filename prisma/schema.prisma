@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ORGANIZER
+  ATTENDEE
+  VOLUNTEER
+  ADMIN
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  REFUNDED
+}
+
+model User {
+  id         String    @id @default(cuid())
+  name       String?
+  email      String?   @unique
+  phone      String?   @unique
+  role       Role      @default(ATTENDEE)
+  createdAt  DateTime  @default(now())
+  events     Event[]   @relation("OrganizerEvents")
+  bookings   Booking[]
+}
+
+model Event {
+  id          String       @id @default(cuid())
+  organizer   User         @relation(fields:[organizerId], references:[id], name: "OrganizerEvents")
+  organizerId String
+  title       String
+  description String?
+  category    String
+  location    String
+  lat         Float?
+  lng         Float?
+  startAt     DateTime
+  endAt       DateTime?
+  status      EventStatus  @default(DRAFT)
+  ticketTypes TicketType[]
+  bookings    Booking[]
+  coupons     Coupon[]
+  createdAt   DateTime     @default(now())
+  featured    Boolean      @default(false)
+}
+
+model TicketType {
+  id          String    @id @default(cuid())
+  event       Event     @relation(fields:[eventId], references:[id])
+  eventId     String
+  name        String
+  price       Float
+  saleStart   DateTime?
+  saleEnd     DateTime?
+  maxQuantity Int
+  totalSold   Int       @default(0)
+  bookings    Booking[]
+}
+
+model Booking {
+  id           String       @id @default(cuid())
+  bookingId    String       @unique
+  user         User?        @relation(fields:[userId], references:[id])
+  userId       String?
+  event        Event        @relation(fields:[eventId], references:[id])
+  eventId      String
+  ticket       TicketType   @relation(fields:[ticketId], references:[id])
+  ticketId     String
+  quantity     Int
+  status       BookingStatus @default(PENDING)
+  qrCodeUrl    String?
+  pdfUrl       String?
+  createdAt    DateTime     @default(now())
+  payment      Payment?
+  checkIns     CheckIn[]
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  booking           Booking       @relation(fields:[bookingId], references:[id])
+  bookingId         String        @unique
+  amount            Float
+  provider          String
+  providerPaymentId String?
+  status            String
+  createdAt         DateTime      @default(now())
+}
+
+model CheckIn {
+  id        String   @id @default(cuid())
+  booking   Booking  @relation(fields:[bookingId], references:[id])
+  bookingId String
+  scannerId String?
+  checkedAt DateTime @default(now())
+}
+
+model OTP {
+  id         String   @id @default(cuid())
+  target     String   // phone or email
+  codeHash   String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+}
+
+model Coupon {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  percentOff   Int?
+  amountOff    Float?
+  maxUsage     Int?
+  usedCount    Int      @default(0)
+  validFrom    DateTime?
+  validUntil   DateTime?
+  event        Event?   @relation(fields:[eventId], references:[id])
+  eventId      String?
+}
