@@ -152,7 +152,7 @@ export async function GET(request: NextRequest) {
     // Return PDF as download
     const filename = `ticket-${booking.bookingId}.pdf`;
     
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
