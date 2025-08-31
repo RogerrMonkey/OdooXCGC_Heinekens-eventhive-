@@ -3,12 +3,16 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+interface RouteParams {
+  params: Promise<{ id: string }>
+}
+
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: RouteParams
 ) {
   try {
-    const couponId = params.id
+    const { id: couponId } = await params
 
     // Check if coupon exists
     const existingCoupon = await prisma.coupon.findUnique({

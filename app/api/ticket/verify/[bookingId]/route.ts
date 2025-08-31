@@ -4,12 +4,16 @@ import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret";
 
+interface RouteParams {
+  params: Promise<{ bookingId: string }>
+}
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: { bookingId: string } }
+  { params }: RouteParams
 ) {
   try {
-    const { bookingId } = params;
+    const { bookingId } = await params;
 
     if (!bookingId) {
       return NextResponse.json(
@@ -126,10 +130,10 @@ export async function GET(
 // POST method for check-in functionality
 export async function POST(
   request: NextRequest,
-  { params }: { params: { bookingId: string } }
+  { params }: RouteParams
 ) {
   try {
-    const { bookingId } = params;
+    const { bookingId } = await params;
     const body = await request.json();
     const { scannerId, action = "checkin" } = body;
 
