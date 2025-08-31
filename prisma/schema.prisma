@@ -27,15 +27,24 @@ enum BookingStatus {
   REFUNDED
 }
 
+enum RoleUpgradeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
-  id         String    @id @default(cuid())
-  name       String?
-  email      String?   @unique
-  phone      String?   @unique
-  role       Role      @default(ATTENDEE)
-  createdAt  DateTime  @default(now())
-  events     Event[]   @relation("OrganizerEvents")
-  bookings   Booking[]
+  id                String              @id @default(cuid())
+  name              String?
+  email             String?             @unique
+  phone             String?             @unique
+  role              Role                @default(ATTENDEE)
+  loyaltyPoints     Int                 @default(0)
+  createdAt         DateTime            @default(now())
+  events            Event[]             @relation("OrganizerEvents")
+  bookings          Booking[]
+  roleUpgradeRequests RoleUpgradeRequest[]
+  loyaltyTransactions LoyaltyTransaction[]
 }
 
 model Event {
@@ -127,4 +136,28 @@ model Coupon {
   validUntil   DateTime?
   event        Event?   @relation(fields:[eventId], references:[id])
   eventId      String?
+}
+
+model RoleUpgradeRequest {
+  id          String            @id @default(cuid())
+  user        User              @relation(fields:[userId], references:[id])
+  userId      String
+  requestedRole Role
+  currentRole Role
+  reason      String?
+  status      RoleUpgradeStatus @default(PENDING)
+  adminNote   String?
+  reviewedBy  String?           // Admin user ID who reviewed
+  reviewedAt  DateTime?
+  createdAt   DateTime          @default(now())
+}
+
+model LoyaltyTransaction {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields:[userId], references:[id])
+  userId      String
+  points      Int      // Positive for earning, negative for spending
+  reason      String   // "event_booking", "referral", "birthday", "redemption"
+  bookingId   String?  // Optional reference to booking
+  createdAt   DateTime @default(now())
 }

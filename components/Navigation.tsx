@@ -1,46 +1,34 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Navigation() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { user, isLoading, logout } = useAuth();
 
-  useEffect(() => {
-    // Check if user is logged in
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
-    
-    if (token && userData) {
-      try {
-        const parsedUser = JSON.parse(userData);
-        setUser(parsedUser);
-        setIsLoggedIn(true);
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-      }
-    }
-  }, []);
-
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
-    setIsLoggedIn(false);
+  const handleLogout = async () => {
+    await logout();
     router.push('/');
   };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+        <div className="container mx-auto px-6 py-4 flex justify-between items-center">
+          <Link href="/" className="text-3xl font-bold text-blue-600 hover:text-blue-700 transition-colors">
+            EventHive
+          </Link>
+          <div className="animate-pulse">
+            <div className="h-8 w-20 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
@@ -53,32 +41,44 @@ export default function Navigation() {
           <Link href="/events" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
             Browse Events
           </Link>
-          <Link href="/create-event" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
-            Create Event
-          </Link>
+          {(user?.role === 'ORGANIZER' || user?.role === 'ADMIN') && (
+            <Link href="/create-event" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
+              Create Event
+            </Link>
+          )}
           
-          {isLoggedIn ? (
+          {user ? (
             <>
-              <Link href="/dashboard" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
-                Dashboard
-              </Link>
-              <Link href="/profile" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
-                Profile
-              </Link>
-              {user?.role === 'ADMIN' && (
-                <Link href="/admin" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
-                  Admin
+              {user?.role === 'ATTENDEE' && (
+                <Link href="/dashboard" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
+                  My Dashboard
+                </Link>
+              )}
+              {user?.role === 'VOLUNTEER' && (
+                <Link href="/dashboard" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
+                  Volunteer Dashboard
                 </Link>
               )}
               {user?.role === 'ORGANIZER' && (
                 <Link href="/organizer" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
-                  Organizer
+                  Organizer Dashboard
                 </Link>
               )}
+              {user?.role === 'ADMIN' && (
+                <Link href="/admin" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
+                  Admin Panel
+                </Link>
+              )}
+              <Link href="/profile" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
+                Profile
+              </Link>
               <div className="flex items-center space-x-4">
                 <span className="text-gray-600 text-sm">Hi, {user?.name || 'User'}</span>
+                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                  {user?.role}
+                </span>
                 <button 
-                  onClick={logout}
+                  onClick={handleLogout}
                   className="text-gray-600 hover:text-red-600 transition-colors font-medium"
                 >
                   Logout

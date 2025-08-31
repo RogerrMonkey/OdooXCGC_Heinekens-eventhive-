@@ -415,6 +415,14 @@ export default function HomePage() {
           </div>
           <div className="border-t border-gray-800 mt-12 pt-8 text-center text-gray-400">
             <p>&copy; 2024 EventHive. All rights reserved. Made with ❤️ in India</p>
+            <div className="mt-4">
+              <Link 
+                href="/auth/admin" 
+                className="text-gray-500 hover:text-gray-300 text-sm transition-colors"
+              >
+                Admin Access
+              </Link>
+            </div>
           </div>
         </div>
       </footer>

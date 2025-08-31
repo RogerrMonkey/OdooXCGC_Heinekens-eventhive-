@@ -10,6 +10,27 @@ interface User {
   email?: string
   phone?: string
   role: string
+  loyaltyPoints?: number
+  createdAt?: string
+}
+
+interface Event {
+  id: string
+  title: string
+  description?: string
+  startAt: string
+  location: string
+  status: string
+  category: string
+}
+
+interface UserStats {
+  totalBookings: number
+  totalEvents?: number
+  totalRevenue?: number
+  totalAttendees?: number
+  loyaltyPoints: number
+  memberSince: string
 }
 
 interface Booking {
@@ -32,6 +53,8 @@ interface Booking {
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null)
   const [bookings, setBookings] = useState<Booking[]>([])
+  const [userEvents, setUserEvents] = useState<Event[]>([])
+  const [userStats, setUserStats] = useState<UserStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState({
@@ -41,31 +64,51 @@ export default function ProfilePage() {
   })
 
   useEffect(() => {
-    fetchUserProfile()
-    fetchUserBookings()
+    // Check if user is logged in
+    const userData = localStorage.getItem('user');
+    if (!userData) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const parsedUser = JSON.parse(userData);
+      setUser(parsedUser);
+      setFormData({
+        name: parsedUser.name || '',
+        email: parsedUser.email || '',
+        phone: parsedUser.phone || ''
+      });
+      
+      // Fetch user-specific data based on role
+      fetchUserProfile();
+      fetchUserBookings();
+      if (parsedUser.role === 'ORGANIZER' || parsedUser.role === 'ADMIN') {
+        fetchUserEvents();
+      }
+      fetchUserStats();
+    } catch (error) {
+      console.error('Error parsing user data:', error);
+      setLoading(false);
+    }
   }, [])
 
   const fetchUserProfile = async () => {
     try {
-      // This would normally get the user from session/auth
-      // For demo purposes, we'll use a mock user
-      const mockUser = {
-        id: 'user_1',
-        name: 'John Doe',
-        email: 'john.doe@example.com',
-        phone: '+91 98765 43210',
-        role: 'ATTENDEE'
+      const response = await fetch('/api/user/profile');
+      const data = await response.json();
+      if (data.ok) {
+        setUser(data.user);
+        setFormData({
+          name: data.user.name || '',
+          email: data.user.email || '',
+          phone: data.user.phone || ''
+        });
       }
-      setUser(mockUser)
-      setFormData({
-        name: mockUser.name || '',
-        email: mockUser.email || '',
-        phone: mockUser.phone || ''
-      })
     } catch (error) {
-      console.error('Error fetching user profile:', error)
+      console.error('Error fetching user profile:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -78,6 +121,30 @@ export default function ProfilePage() {
       }
     } catch (error) {
       console.error('Error fetching bookings:', error)
+    }
+  }
+
+  const fetchUserEvents = async () => {
+    try {
+      const response = await fetch('/api/user/events')
+      const data = await response.json()
+      if (data.ok) {
+        setUserEvents(data.events)
+      }
+    } catch (error) {
+      console.error('Error fetching user events:', error)
+    }
+  }
+
+  const fetchUserStats = async () => {
+    try {
+      const response = await fetch('/api/user/stats')
+      const data = await response.json()
+      if (data.ok) {
+        setUserStats(data.stats)
+      }
+    } catch (error) {
+      console.error('Error fetching user stats:', error)
     }
   }
 
@@ -244,98 +311,290 @@ export default function ProfilePage() {
             )}
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {/* Role-Specific Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            {/* Common stats for all users */}
             <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
-              <div className="text-3xl font-bold text-blue-600 mb-2">{bookings.length}</div>
-              <div className="text-gray-600">Total Bookings</div>
+              <div className="text-3xl font-bold text-blue-600 mb-2">
+                {userStats?.loyaltyPoints || user?.loyaltyPoints || 0}
+              </div>
+              <div className="text-gray-600">Loyalty Points</div>
             </div>
+            
             <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
               <div className="text-3xl font-bold text-green-600 mb-2">
-                {bookings.filter(b => b.status === 'CONFIRMED').length}
+                {userStats?.memberSince || (user?.createdAt ? new Date(user.createdAt).getFullYear() : new Date().getFullYear())}
               </div>
-              <div className="text-gray-600">Confirmed Events</div>
+              <div className="text-gray-600">Member Since</div>
             </div>
-            <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
-              <div className="text-3xl font-bold text-purple-600 mb-2">
-                ₹{bookings.reduce((sum, booking) => sum + (booking.ticket.price * booking.quantity), 0).toLocaleString()}
-              </div>
-              <div className="text-gray-600">Total Spent</div>
-            </div>
-          </div>
 
-          {/* Recent Bookings */}
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
-              <span className="mr-3">🎫</span>
-              My Bookings
-            </h2>
-
-            {bookings.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-gray-100 rounded-full mx-auto mb-4 flex items-center justify-center">
-                  <span className="text-2xl">🎫</span>
+            {/* Role-specific stats */}
+            {user?.role === 'ATTENDEE' && (
+              <>
+                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
+                  <div className="text-3xl font-bold text-purple-600 mb-2">{bookings.length}</div>
+                  <div className="text-gray-600">Total Bookings</div>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No bookings yet</h3>
-                <p className="text-gray-600 mb-6">Start exploring events and book your first ticket!</p>
-                <Link href="/events" className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
-                  Browse Events
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {bookings.map((booking) => (
-                  <div key={booking.id} className="border border-gray-200 rounded-xl p-6 hover:border-blue-200 transition-colors">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-800">{booking.event.title}</h3>
-                        <p className="text-gray-600">Booking ID: {booking.bookingId}</p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-sm font-bold ${getStatusColor(booking.status)}`}>
-                        {booking.status}
-                      </span>
-                    </div>
-
-                    <div className="grid md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <div className="text-gray-500 mb-1">Date & Time</div>
-                        <div className="font-semibold">{formatDate(booking.event.startAt)}</div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500 mb-1">Location</div>
-                        <div className="font-semibold">{booking.event.location}</div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500 mb-1">Ticket Type</div>
-                        <div className="font-semibold">{booking.ticket.name} × {booking.quantity}</div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500 mb-1">Total Amount</div>
-                        <div className="font-semibold text-blue-600">₹{(booking.ticket.price * booking.quantity).toLocaleString()}</div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-6 pt-4 border-t border-gray-100 gap-4">
-                      <Link 
-                        href={`/events/${booking.eventId}`}
-                        className="text-blue-600 hover:text-blue-700 font-semibold transition-colors"
-                      >
-                        View Event →
-                      </Link>
-                      
-                      {/* Integrated Ticket Management */}
-                      <div className="w-full sm:w-auto">
-                        <TicketManager 
-                          bookingId={booking.bookingId}
-                          className="w-full sm:w-auto"
-                        />
-                      </div>
-                    </div>
+                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
+                  <div className="text-3xl font-bold text-orange-600 mb-2">
+                    ₹{bookings.reduce((sum, booking) => sum + (booking.ticket.price * booking.quantity), 0).toLocaleString()}
                   </div>
-                ))}
-              </div>
+                  <div className="text-gray-600">Total Spent</div>
+                </div>
+              </>
+            )}
+
+            {(user?.role === 'ORGANIZER' || user?.role === 'ADMIN') && (
+              <>
+                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
+                  <div className="text-3xl font-bold text-purple-600 mb-2">
+                    {userStats?.totalEvents || userEvents.length}
+                  </div>
+                  <div className="text-gray-600">Events Created</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
+                  <div className="text-3xl font-bold text-orange-600 mb-2">
+                    ₹{userStats?.totalRevenue?.toLocaleString() || '0'}
+                  </div>
+                  <div className="text-gray-600">Total Revenue</div>
+                </div>
+              </>
+            )}
+
+            {user?.role === 'VOLUNTEER' && (
+              <>
+                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
+                  <div className="text-3xl font-bold text-purple-600 mb-2">
+                    {userStats?.totalEvents || 0}
+                  </div>
+                  <div className="text-gray-600">Events Assisted</div>
+                </div>
+                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
+                  <div className="text-3xl font-bold text-orange-600 mb-2">
+                    {userStats?.totalAttendees || 0}
+                  </div>
+                  <div className="text-gray-600">People Helped</div>
+                </div>
+              </>
             )}
           </div>
+
+          {/* Role-Specific Content */}
+          {user?.role === 'ATTENDEE' && (
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 mb-8">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                <span className="mr-3">🎫</span>
+                My Bookings
+              </h2>
+
+              {bookings.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full mx-auto mb-4 flex items-center justify-center">
+                    <span className="text-2xl">🎫</span>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No bookings yet</h3>
+                  <p className="text-gray-600 mb-6">Start exploring events and book your first ticket!</p>
+                  <Link href="/events" className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                    Browse Events
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {bookings.map((booking) => (
+                    <div key={booking.id} className="border border-gray-200 rounded-xl p-6 hover:border-blue-200 transition-colors">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-800">{booking.event.title}</h3>
+                          <p className="text-gray-600">Booking ID: {booking.bookingId}</p>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-sm font-bold ${getStatusColor(booking.status)}`}>
+                          {booking.status}
+                        </span>
+                      </div>
+
+                      <div className="grid md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <div className="text-gray-500 mb-1">Date & Time</div>
+                          <div className="font-semibold">{formatDate(booking.event.startAt)}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500 mb-1">Location</div>
+                          <div className="font-semibold">{booking.event.location}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500 mb-1">Ticket Type</div>
+                          <div className="font-semibold">{booking.ticket.name} × {booking.quantity}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500 mb-1">Total Amount</div>
+                          <div className="font-semibold text-blue-600">₹{(booking.ticket.price * booking.quantity).toLocaleString()}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-6 pt-4 border-t border-gray-100 gap-4">
+                        <Link 
+                          href={`/events/${booking.eventId}`}
+                          className="text-blue-600 hover:text-blue-700 font-semibold transition-colors"
+                        >
+                          View Event →
+                        </Link>
+                        
+                        <div className="w-full sm:w-auto">
+                          <TicketManager 
+                            bookingId={booking.bookingId}
+                            className="w-full sm:w-auto"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {(user?.role === 'ORGANIZER' || user?.role === 'ADMIN') && (
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 mb-8">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+                  <span className="mr-3">🎪</span>
+                  My Events
+                </h2>
+                <Link 
+                  href="/create-event"
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Create New Event
+                </Link>
+              </div>
+
+              {userEvents.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full mx-auto mb-4 flex items-center justify-center">
+                    <span className="text-2xl">🎪</span>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No events created yet</h3>
+                  <p className="text-gray-600 mb-6">Start creating amazing events for your audience!</p>
+                  <Link href="/create-event" className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                    Create Your First Event
+                  </Link>
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 gap-6">
+                  {userEvents.map((event) => (
+                    <div key={event.id} className="border border-gray-200 rounded-xl p-6 hover:border-blue-200 transition-colors">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-gray-800">{event.title}</h3>
+                        <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                          event.status === 'PUBLISHED' ? 'bg-green-100 text-green-800' :
+                          event.status === 'DRAFT' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {event.status}
+                        </span>
+                      </div>
+                      
+                      <p className="text-gray-600 text-sm mb-4 line-clamp-2">{event.description}</p>
+                      
+                      <div className="text-sm">
+                        <div className="text-gray-500 mb-1">Date & Location</div>
+                        <div className="font-semibold">{formatDate(event.startAt)}</div>
+                        <div className="font-semibold">{event.location}</div>
+                      </div>
+
+                      <div className="flex justify-between items-center mt-4">
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                          {event.category}
+                        </span>
+                        <Link 
+                          href={`/events/${event.id}`}
+                          className="text-blue-600 hover:text-blue-700 font-semibold transition-colors text-sm"
+                        >
+                          Manage →
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {user?.role === 'VOLUNTEER' && (
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 mb-8">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                <span className="mr-3">🤝</span>
+                Volunteer Activities
+              </h2>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-blue-800 mb-2">Check-in Services</h3>
+                  <p className="text-blue-700 text-sm mb-4">Scan QR codes and check-in attendees at events</p>
+                  <Link 
+                    href="/volunteer/checkin"
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  >
+                    Start Check-in
+                  </Link>
+                </div>
+
+                <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-green-800 mb-2">Event Support</h3>
+                  <p className="text-green-700 text-sm mb-4">Assist organizers with event management tasks</p>
+                  <Link 
+                    href="/volunteer/events"
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm"
+                  >
+                    View Events
+                  </Link>
+                </div>
+              </div>
+
+              {/* Volunteer history */}
+              <div className="mt-8">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Recent Activities</h3>
+                <div className="text-center py-8">
+                  <p className="text-gray-600">Your volunteer activities will appear here</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {user?.role === 'ADMIN' && (
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 mb-8">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                <span className="mr-3">👑</span>
+                Admin Dashboard
+              </h2>
+
+              <div className="grid md:grid-cols-3 gap-6">
+                <Link 
+                  href="/admin"
+                  className="bg-gradient-to-r from-red-50 to-red-100 rounded-lg p-6 hover:from-red-100 hover:to-red-200 transition-colors"
+                >
+                  <h3 className="text-lg font-semibold text-red-800 mb-2">Admin Panel</h3>
+                  <p className="text-red-700 text-sm">Manage users, events, and platform settings</p>
+                </Link>
+
+                <Link 
+                  href="/admin?tab=role-requests"
+                  className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg p-6 hover:from-purple-100 hover:to-purple-200 transition-colors"
+                >
+                  <h3 className="text-lg font-semibold text-purple-800 mb-2">Role Requests</h3>
+                  <p className="text-purple-700 text-sm">Review and approve role upgrade requests</p>
+                </Link>
+
+                <Link 
+                  href="/admin?tab=analytics"
+                  className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-6 hover:from-blue-100 hover:to-blue-200 transition-colors"
+                >
+                  <h3 className="text-lg font-semibold text-blue-800 mb-2">Analytics</h3>
+                  <p className="text-blue-700 text-sm">View platform statistics and insights</p>
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

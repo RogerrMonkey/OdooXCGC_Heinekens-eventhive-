@@ -78,13 +78,41 @@ export async function POST(req: Request) {
         data: { status: "CONFIRMED" }
       });
 
+      // Award loyalty points for successful booking (1 point per ₹10 spent)
+      if (booking.userId) {
+        const loyaltyPoints = Math.floor(paymentEntity.amount / 1000); // Razorpay amount is in paise
+        if (loyaltyPoints > 0) {
+          await prisma.loyaltyTransaction.create({
+            data: {
+              userId: booking.userId,
+              points: loyaltyPoints,
+              reason: "event_booking",
+              bookingId: booking.id
+            }
+          });
+
+          await prisma.user.update({
+            where: { id: booking.userId },
+            data: {
+              loyaltyPoints: {
+                increment: loyaltyPoints
+              }
+            }
+          });
+        }
+      }
+
       // Generate QR code and PDF ticket if not already generated
       if (!booking.qrCodeUrl || !booking.pdfUrl) {
         const ticketUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/ticket/${booking.bookingId}`;
         const qrDataUrl = await generateQrDataUrl(ticketUrl);
         const pdfBuffer = await generateTicketPdfBuffer({
           booking,
-          event: booking.event,
+          event: {
+            ...booking.event,
+            description: booking.event.description || undefined,
+            endAt: booking.event.endAt || undefined
+          },
           user: booking.user ?? undefined,
           qrDataUrl
         });

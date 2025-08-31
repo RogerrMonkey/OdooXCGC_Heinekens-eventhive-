@@ -24,30 +24,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Authentication required" }, { status: 401 });
     }
 
-    const bookings = await prisma.booking.findMany({
-      where: { userId: userInfo.userId },
-      include: {
-        event: {
-          select: {
-            id: true,
-            title: true,
-            startAt: true,
-            location: true
-          }
-        },
-        ticket: {
-          select: {
-            name: true,
-            price: true
-          }
-        }
+    // Only organizers and admins can access this endpoint
+    if (userInfo.role !== 'ORGANIZER' && userInfo.role !== 'ADMIN') {
+      return NextResponse.json({ ok: false, error: "Access denied" }, { status: 403 });
+    }
+
+    const events = await prisma.event.findMany({
+      where: userInfo.role === 'ADMIN' ? {} : { organizerId: userInfo.userId },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        startAt: true,
+        location: true,
+        status: true,
+        category: true,
+        createdAt: true
       },
       orderBy: { createdAt: 'desc' }
     });
 
-    return NextResponse.json({ ok: true, bookings });
+    return NextResponse.json({ ok: true, events });
   } catch (error) {
-    console.error('Error fetching user bookings:', error);
-    return NextResponse.json({ ok: false, error: 'Failed to fetch bookings' }, { status: 500 });
+    console.error('Error fetching user events:', error);
+    return NextResponse.json({ ok: false, error: 'Failed to fetch events' }, { status: 500 });
   }
 }

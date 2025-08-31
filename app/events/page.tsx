@@ -35,6 +35,7 @@ interface Filters {
   ticketType: string
   sortBy: string
   featured: boolean
+  trending: boolean
 }
 
 export default function EventsPage() {
@@ -53,7 +54,8 @@ export default function EventsPage() {
     dateRange: '',
     ticketType: '',
     sortBy: 'relevance',
-    featured: false
+    featured: false,
+    trending: false
   })
 
   const eventsPerPage = 12
@@ -136,6 +138,14 @@ export default function EventsPage() {
     // Featured filter
     if (filters.featured) {
       filtered = filtered.filter(event => event.featured)
+    }
+
+    // Trending filter (events with high ticket sales in recent days)
+    if (filters.trending) {
+      filtered = filtered.filter(event => {
+        const totalSold = event.ticketTypes.reduce((sum, ticket) => sum + ticket.totalSold, 0)
+        return totalSold > 10 // Consider events with more than 10 tickets sold as trending
+      })
     }
 
     // Ticket type filter
@@ -241,7 +251,8 @@ export default function EventsPage() {
       dateRange: '',
       ticketType: '',
       sortBy: 'relevance',
-      featured: false
+      featured: false,
+      trending: false
     })
     setCurrentPage(1)
   }
@@ -289,7 +300,7 @@ export default function EventsPage() {
         </div>
 
         {/* Search and Filters */}
-        <div className="card card-elevated p-8 mb-12 slide-in">
+        <div className="bg-white rounded-2xl shadow-lg p-8 mb-12 border border-gray-100">
           {/* Main Search */}
           <div className="flex flex-col lg:flex-row gap-6 mb-6">
             <div className="flex-1">
@@ -299,10 +310,12 @@ export default function EventsPage() {
                   placeholder="Search events, organizers, or locations..."
                   value={filters.search}
                   onChange={(e) => handleFilterChange('search', e.target.value)}
-                  className="input focus-ring w-full pl-12"
+                  className="w-full pl-12 pr-4 py-4 text-lg border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all duration-200 bg-gray-50 focus:bg-white"
                 />
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <span className="text-neutral-400 text-xl">🔍</span>
+                  <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
                 </div>
               </div>
             </div>
@@ -311,7 +324,7 @@ export default function EventsPage() {
               <select
                 value={filters.sortBy}
                 onChange={(e) => handleFilterChange('sortBy', e.target.value)}
-                className="input focus-ring"
+                className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none bg-gray-50 focus:bg-white min-w-48"
               >
                 {sortOptions.map(option => (
                   <option key={option.value} value={option.value}>
@@ -322,13 +335,15 @@ export default function EventsPage() {
               
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="btn btn-secondary flex items-center gap-3"
+                className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors duration-200 flex items-center gap-3 font-medium"
               >
-                <span>🎛️</span>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                </svg>
                 Filters
-                <span className={`transform transition-transform duration-200 ${showFilters ? 'rotate-180' : ''}`}>
-                  ▼
-                </span>
+                <svg className={`w-4 h-4 transform transition-transform duration-200 ${showFilters ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
             </div>
           </div>
@@ -403,15 +418,24 @@ export default function EventsPage() {
                 />
               </div>
 
-              <div className="flex items-center">
+              <div className="flex items-center space-y-2">
                 <label className="flex items-center">
                   <input
                     type="checkbox"
                     checked={filters.featured}
                     onChange={(e) => handleFilterChange('featured', e.target.checked)}
-                    className="mr-3 text-slate-600 focus:ring-slate-500 w-4 h-4"
+                    className="mr-3 text-blue-600 focus:ring-blue-500 w-4 h-4 rounded"
                   />
                   <span className="text-sm font-semibold text-slate-700">Featured Events Only</span>
+                </label>
+                <label className="flex items-center mt-2">
+                  <input
+                    type="checkbox"
+                    checked={filters.trending}
+                    onChange={(e) => handleFilterChange('trending', e.target.checked)}
+                    className="mr-3 text-red-600 focus:ring-red-500 w-4 h-4 rounded"
+                  />
+                  <span className="text-sm font-semibold text-slate-700">🔥 Trending Events</span>
                 </label>
               </div>
 

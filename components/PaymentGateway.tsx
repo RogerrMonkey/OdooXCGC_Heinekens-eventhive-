@@ -87,9 +87,12 @@ export default function PaymentGateway({
       const paymentData = await paymentResponse.json()
 
       if (!paymentData.success) {
+        console.error('Payment order creation failed:', paymentData)
         onError(paymentData.message || 'Payment order creation failed')
         return
       }
+
+      console.log('Payment order created successfully:', paymentData)
 
       // Step 3: Open Razorpay checkout
       if (!razorpayLoaded || !(window as any).Razorpay) {
@@ -97,8 +100,17 @@ export default function PaymentGateway({
         return
       }
 
+      // Validate Razorpay key
+      if (!paymentData.razorpayKeyId) {
+        console.error('Razorpay key ID not found in payment response:', paymentData)
+        onError('Payment configuration error. Please ensure Razorpay is properly configured.')
+        return
+      }
+
+      console.log('Initializing Razorpay with key:', paymentData.razorpayKeyId.substring(0, 6) + '...')
+
       const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        key: paymentData.razorpayKeyId,
         amount: paymentData.order.amount,
         currency: paymentData.order.currency,
         name: 'EventHive',
@@ -144,8 +156,14 @@ export default function PaymentGateway({
         }
       }
 
-      const rzp = new (window as any).Razorpay(options)
-      rzp.open()
+      try {
+        const rzp = new (window as any).Razorpay(options)
+        rzp.open()
+      } catch (error: any) {
+        console.error('Error initializing Razorpay:', error)
+        onError('Failed to initialize payment. Please check your configuration and try again.')
+        return
+      }
 
     } catch (error: any) {
       onError(error.message || 'Payment failed')

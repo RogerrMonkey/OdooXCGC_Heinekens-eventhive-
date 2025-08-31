@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 interface TicketType {
+  id?: string
   name: string
   price: number
   maxQuantity: number
@@ -16,8 +17,14 @@ interface TicketType {
 
 export default function CreateEventPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const editEventId = searchParams.get('edit')
+  const isEditMode = Boolean(editEventId)
+  
   const [loading, setLoading] = useState(false)
+  const [loadingEvent, setLoadingEvent] = useState(isEditMode)
   const [currentStep, setCurrentStep] = useState(1)
+  const [authorized, setAuthorized] = useState(false)
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -30,10 +37,97 @@ export default function CreateEventPage() {
     status: 'DRAFT',
     featured: false
   })
-  
+
+  // Check authorization on component mount
+  useEffect(() => {
+    const userData = localStorage.getItem('user')
+    if (!userData) {
+      router.push('/auth')
+      return
+    }
+
+    try {
+      const user = JSON.parse(userData)
+      if (user.role !== 'ORGANIZER' && user.role !== 'ADMIN') {
+        alert('Access denied. Only organizers and admins can create events.')
+        router.push('/dashboard')
+        return
+      }
+      setAuthorized(true)
+    } catch (error) {
+      router.push('/auth')
+    }
+  }, [router])
+
+  // Load event data for editing
+  useEffect(() => {
+    if (isEditMode && editEventId && authorized) {
+      loadEventData(editEventId)
+    }
+  }, [isEditMode, editEventId, authorized])
+
+  const loadEventData = async (eventId: string) => {
+    try {
+      setLoadingEvent(true)
+      const response = await fetch(`/api/events/${eventId}`)
+      const data = await response.json()
+
+      if (data.ok) {
+        const event = data.event
+        setFormData({
+          title: event.title,
+          description: event.description,
+          category: event.category,
+          location: event.location,
+          lat: event.lat?.toString() || '',
+          lng: event.lng?.toString() || '',
+          startAt: event.startAt ? new Date(event.startAt).toISOString().slice(0, 16) : '',
+          endAt: event.endAt ? new Date(event.endAt).toISOString().slice(0, 16) : '',
+          status: event.status,
+          featured: event.featured || false
+        })
+
+        if (event.ticketTypes && event.ticketTypes.length > 0) {
+          setTicketTypes(event.ticketTypes.map((ticket: any) => ({
+            id: ticket.id,
+            name: ticket.name,
+            price: ticket.price,
+            maxQuantity: ticket.maxQuantity,
+            saleStart: ticket.saleStart ? new Date(ticket.saleStart).toISOString().slice(0, 16) : '',
+            saleEnd: ticket.saleEnd ? new Date(ticket.saleEnd).toISOString().slice(0, 16) : '',
+            description: ticket.description || ''
+          })))
+        }
+      } else {
+        alert('Failed to load event data')
+        router.push('/organizer')
+      }
+    } catch (error) {
+      console.error('Error loading event:', error)
+      alert('Failed to load event data')
+      router.push('/organizer')
+    } finally {
+      setLoadingEvent(false)
+    }
+  }
+
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([
     { name: 'General', price: 0, maxQuantity: 100, description: 'Standard admission' }
   ])
+
+  // Don't render the form until authorization is checked and event data is loaded (if editing)
+  if (!authorized || loadingEvent) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">
+            {loadingEvent ? 'Loading event data...' : 'Checking permissions...'}
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   const categories = [
     'Music & Concerts',
@@ -108,8 +202,11 @@ export default function CreateEventPage() {
         ticketTypes: ticketTypes.filter(ticket => ticket.name && ticket.price >= 0)
       }
 
-      const response = await fetch('/api/events/create', {
-        method: 'POST',
+      const url = isEditMode ? `/api/events/${editEventId}` : '/api/events/create'
+      const method = isEditMode ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
@@ -117,13 +214,14 @@ export default function CreateEventPage() {
       const data = await response.json()
 
       if (data.ok) {
-        router.push(`/events/${data.event.id}`)
+        const eventId = isEditMode ? editEventId : data.event.id
+        router.push(`/events/${eventId}`)
       } else {
-        alert(data.error || 'Failed to create event')
+        alert(data.error || `Failed to ${isEditMode ? 'update' : 'create'} event`)
       }
     } catch (error) {
-      console.error('Error creating event:', error)
-      alert('Failed to create event')
+      console.error(`Error ${isEditMode ? 'updating' : 'creating'} event:`, error)
+      alert(`Failed to ${isEditMode ? 'update' : 'create'} event`)
     } finally {
       setLoading(false)
     }
@@ -144,9 +242,11 @@ export default function CreateEventPage() {
           {/* Header */}
           <div className="text-center mb-12">
             <h1 className="text-5xl font-bold bg-gradient-to-r from-indigo-600 to-indigo-800 bg-clip-text text-transparent mb-6">
-              Create Amazing Event
+              {isEditMode ? 'Edit Your Event' : 'Create Amazing Event'}
             </h1>
-            <p className="text-xl text-gray-600 font-light">Bring people together with your unique event</p>
+            <p className="text-xl text-gray-600 font-light">
+              {isEditMode ? 'Update your event details and settings' : 'Bring people together with your unique event'}
+            </p>
           </div>
 
           {/* Progress Steps */}
@@ -509,7 +609,7 @@ export default function CreateEventPage() {
                       disabled={loading}
                       className="px-6 py-3 bg-gray-600 text-white rounded-xl hover:bg-gray-700 disabled:opacity-50 transition-all duration-200 font-semibold"
                     >
-                      {loading ? 'Saving...' : '📝 Save as Draft'}
+                      {loading ? 'Saving...' : isEditMode ? '📝 Save Changes as Draft' : '📝 Save as Draft'}
                     </button>
                     
                     <button
@@ -518,7 +618,7 @@ export default function CreateEventPage() {
                       disabled={loading}
                       className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 disabled:opacity-50 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
                     >
-                      {loading ? 'Publishing...' : '🚀 Publish Event'}
+                      {loading ? (isEditMode ? 'Updating...' : 'Publishing...') : (isEditMode ? '✨ Update Event' : '🚀 Publish Event')}
                     </button>
                   </>
                 )}

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Event {
   id: string;
@@ -11,47 +12,94 @@ interface Event {
   startAt: string;
   location: string;
   status: string;
-  ticketTypes: Array<{
-    name: string;
-    price: number;
-    totalSold: number;
-    maxQuantity: number;
-  }>;
-  bookings: Array<{
-    quantity: number;
-    status: string;
-    checkIns: Array<{ checkedAt: string }>;
-  }>;
+  description: string;
+  createdAt: string;
 }
 
-interface DashboardStats {
+interface UserStats {
   totalEvents: number;
-  activeEvents: number;
   totalRevenue: number;
-  totalTicketsSold: number;
-  totalAttendees: number;
-  averageTicketPrice: number;
+  loyaltyPoints: number;
+  memberSince: string;
+}
+
+interface EventBooking {
+  id: string;
+  bookingId: string;
+  quantity: number;
+  status: string;
+  createdAt: string;
+  event: {
+    title: string;
+    startAt: string;
+  };
+  ticket: {
+    name: string;
+    price: number;
+  };
 }
 
 const OrganizerDashboard = () => {
   const router = useRouter();
+  const { user, isLoading } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [recentBookings, setRecentBookings] = useState<EventBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    // Check authentication and role
+    if (!isLoading && !user) {
+      router.push('/auth');
+      return;
+    }
+
+    if (!isLoading && user && user.role !== 'ORGANIZER' && user.role !== 'ADMIN') {
+      alert('Access denied. Organizer role required.');
+      router.push('/dashboard');
+      return;
+    }
+
+    if (user) {
+      fetchDashboardData();
+    }
+  }, [user, isLoading, router]);
 
   const fetchDashboardData = async () => {
     try {
-      const response = await fetch('/api/dashboard?type=organizer');
-      if (response.ok) {
-        const data = await response.json();
-        setEvents(data.events || []);
-        setStats(data.stats || null);
+      setLoading(true);
+      
+      // Fetch user events
+      const eventsResponse = await fetch('/api/user/events', {
+        credentials: 'include',
+      });
+      
+      if (eventsResponse.ok) {
+        const eventsData = await eventsResponse.json();
+        setEvents(eventsData.events || []);
       }
+
+      // Fetch user stats
+      const statsResponse = await fetch('/api/user/stats', {
+        credentials: 'include',
+      });
+      
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json();
+        setStats(statsData.stats || null);
+      }
+
+      // Fetch recent bookings for organizer's events
+      const bookingsResponse = await fetch('/api/organizer/bookings', {
+        credentials: 'include',
+      });
+      
+      if (bookingsResponse.ok) {
+        const bookingsData = await bookingsResponse.json();
+        setRecentBookings(bookingsData.bookings || []);
+      }
+
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -76,24 +124,7 @@ const OrganizerDashboard = () => {
     });
   };
 
-  const getEventStats = (event: Event) => {
-    const totalBookings = event.bookings.length;
-    const confirmedBookings = event.bookings.filter(b => b.status === 'CONFIRMED');
-    const totalTicketsSold = confirmedBookings.reduce((sum, b) => sum + b.quantity, 0);
-    const totalCheckedIn = confirmedBookings.filter(b => b.checkIns.length > 0).length;
-    const totalRevenue = event.ticketTypes.reduce((sum, t) => sum + (t.price * t.totalSold), 0);
-    
-    return {
-      totalBookings,
-      confirmedBookings: confirmedBookings.length,
-      totalTicketsSold,
-      totalCheckedIn,
-      totalRevenue,
-      checkInRate: confirmedBookings.length > 0 ? (totalCheckedIn / confirmedBookings.length) * 100 : 0
-    };
-  };
-
-  if (loading) {
+  if (isLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -157,7 +188,7 @@ const OrganizerDashboard = () => {
         {activeTab === 'overview' && stats && (
           <div className="space-y-8">
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
@@ -168,20 +199,6 @@ const OrganizerDashboard = () => {
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-500">Total Events</p>
                     <p className="text-2xl font-semibold text-gray-900">{stats.totalEvents}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
-                      <span className="text-white font-semibold">✅</span>
-                    </div>
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-500">Active Events</p>
-                    <p className="text-2xl font-semibold text-gray-900">{stats.activeEvents}</p>
                   </div>
                 </div>
               </div>
@@ -203,15 +220,49 @@ const OrganizerDashboard = () => {
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                      <span className="text-white font-semibold">🎫</span>
+                    <div className="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
+                      <span className="text-white font-semibold">⭐</span>
                     </div>
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-500">Tickets Sold</p>
-                    <p className="text-2xl font-semibold text-gray-900">{stats.totalTicketsSold}</p>
+                    <p className="text-sm font-medium text-gray-500">Loyalty Points</p>
+                    <p className="text-2xl font-semibold text-gray-900">{stats.loyaltyPoints}</p>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Recent Bookings */}
+            <div className="bg-white rounded-lg shadow">
+              <div className="p-6 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Recent Bookings</h3>
+              </div>
+              <div className="p-6">
+                {recentBookings.length === 0 ? (
+                  <p className="text-gray-500 text-center py-4">No bookings yet</p>
+                ) : (
+                  <div className="space-y-4">
+                    {recentBookings.slice(0, 5).map((booking) => (
+                      <div key={booking.id} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0">
+                        <div>
+                          <p className="font-medium text-gray-900">{booking.event.title}</p>
+                          <p className="text-sm text-gray-500">{booking.ticket.name} × {booking.quantity}</p>
+                          <p className="text-xs text-gray-400">{formatDate(booking.createdAt)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium text-gray-900">{formatCurrency(booking.ticket.price * booking.quantity)}</p>
+                          <span className={`inline-block px-2 py-1 text-xs rounded-full ${
+                            booking.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
+                            booking.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {booking.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -276,82 +327,53 @@ const OrganizerDashboard = () => {
               </div>
             ) : (
               <div className="grid gap-6">
-                {events.map((event) => {
-                  const eventStats = getEventStats(event);
-                  return (
-                    <div key={event.id} className="bg-white rounded-lg shadow p-6">
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h4 className="text-xl font-semibold text-gray-900">{event.title}</h4>
-                          <p className="text-gray-600">{event.category}</p>
-                          <p className="text-sm text-gray-500 mt-1">
-                            📅 {formatDate(event.startAt)}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            📍 {event.location}
-                          </p>
-                        </div>
-                        <div className="flex space-x-2">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            event.status === 'PUBLISHED' 
-                              ? 'bg-green-100 text-green-800'
-                              : event.status === 'DRAFT'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {event.status}
-                          </span>
-                        </div>
+                {events.map((event) => (
+                  <div key={event.id} className="bg-white rounded-lg shadow p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="text-xl font-semibold text-gray-900">{event.title}</h4>
+                        <p className="text-gray-600">{event.category}</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          📅 {formatDate(event.startAt)}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          📍 {event.location}
+                        </p>
                       </div>
-
-                      {/* Event Stats */}
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-blue-600">{eventStats.totalBookings}</p>
-                          <p className="text-xs text-gray-500">Total Bookings</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-green-600">{eventStats.totalTicketsSold}</p>
-                          <p className="text-xs text-gray-500">Tickets Sold</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-purple-600">{formatCurrency(eventStats.totalRevenue)}</p>
-                          <p className="text-xs text-gray-500">Revenue</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-orange-600">{eventStats.totalCheckedIn}</p>
-                          <p className="text-xs text-gray-500">Checked In</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-red-600">{Math.round(eventStats.checkInRate)}%</p>
-                          <p className="text-xs text-gray-500">Check-in Rate</p>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex space-x-3">
-                        <Link
-                          href={`/events/${event.id}`}
-                          className="flex-1 bg-blue-600 text-white text-center py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
-                        >
-                          View Event
-                        </Link>
-                        <button
-                          onClick={() => window.open(`/api/checkin?eventId=${event.id}`, '_blank')}
-                          className="flex-1 bg-green-600 text-white text-center py-2 px-4 rounded-lg hover:bg-green-700 transition-colors"
-                        >
-                          Check-in Stats
-                        </button>
-                        <button
-                          onClick={() => window.open(`/api/analytics?eventId=${event.id}`, '_blank')}
-                          className="flex-1 bg-purple-600 text-white text-center py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors"
-                        >
-                          Analytics
-                        </button>
+                      <div className="flex space-x-2">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          event.status === 'PUBLISHED' 
+                            ? 'bg-green-100 text-green-800'
+                            : event.status === 'DRAFT'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {event.status}
+                        </span>
                       </div>
                     </div>
-                  );
-                })}
+
+                    <div className="mb-4">
+                      <p className="text-gray-600 text-sm line-clamp-2">{event.description}</p>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex space-x-3">
+                      <Link
+                        href={`/events/${event.id}`}
+                        className="flex-1 bg-blue-600 text-white text-center py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        View Event
+                      </Link>
+                      <Link
+                        href={`/create-event?edit=${event.id}`}
+                        className="flex-1 bg-gray-600 text-white text-center py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
+                      >
+                        Edit Event
+                      </Link>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -372,32 +394,32 @@ const OrganizerDashboard = () => {
                     <span className="text-2xl font-bold text-green-600">{formatCurrency(stats.totalRevenue)}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Average Ticket Price</span>
-                    <span className="text-lg font-semibold text-blue-600">{formatCurrency(stats.averageTicketPrice)}</span>
+                    <span className="text-gray-600">Total Events</span>
+                    <span className="text-lg font-semibold text-blue-600">{stats.totalEvents}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Total Tickets Sold</span>
-                    <span className="text-lg font-semibold text-purple-600">{stats.totalTicketsSold}</span>
+                    <span className="text-gray-600">Loyalty Points</span>
+                    <span className="text-lg font-semibold text-purple-600">{stats.loyaltyPoints}</span>
                   </div>
                 </div>
               </div>
 
               {/* Event Performance */}
               <div className="bg-white rounded-lg shadow p-6">
-                <h4 className="text-lg font-medium text-gray-900 mb-4">Event Performance</h4>
+                <h4 className="text-lg font-medium text-gray-900 mb-4">Event Statistics</h4>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Active Events</span>
-                    <span className="text-2xl font-bold text-blue-600">{stats.activeEvents}</span>
+                    <span className="text-gray-600">Member Since</span>
+                    <span className="text-lg font-semibold text-gray-700">{stats.memberSince}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Total Attendees</span>
-                    <span className="text-lg font-semibold text-green-600">{stats.totalAttendees}</span>
+                    <span className="text-gray-600">Recent Bookings</span>
+                    <span className="text-lg font-semibold text-green-600">{recentBookings.length}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Success Rate</span>
+                    <span className="text-gray-600">Average Revenue per Event</span>
                     <span className="text-lg font-semibold text-purple-600">
-                      {stats.totalEvents > 0 ? Math.round((stats.activeEvents / stats.totalEvents) * 100) : 0}%
+                      {stats.totalEvents > 0 ? formatCurrency(stats.totalRevenue / stats.totalEvents) : formatCurrency(0)}
                     </span>
                   </div>
                 </div>
@@ -415,12 +437,15 @@ const OrganizerDashboard = () => {
                       <p className="text-sm text-gray-500">{formatDate(event.startAt)}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-gray-900">
-                        {formatCurrency(getEventStats(event).totalRevenue)}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {getEventStats(event).totalTicketsSold} tickets
-                      </p>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        event.status === 'PUBLISHED' 
+                          ? 'bg-green-100 text-green-800'
+                          : event.status === 'DRAFT'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {event.status}
+                      </span>
                     </div>
                   </div>
                 ))}

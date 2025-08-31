@@ -34,7 +34,8 @@ export async function POST(req: Request) {
         currency: order.currency,
         receipt: order.receipt,
         notes: order.notes
-      }
+      },
+      razorpayKeyId: process.env.RAZORPAY_KEY_ID
     });
 
   } catch (error: any) {

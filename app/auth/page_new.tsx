@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 
 export default function AuthPage() {
   const router = useRouter()
@@ -17,14 +16,6 @@ export default function AuthPage() {
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
         <p className="mt-4 text-gray-600">Redirecting to login...</p>
-        <div className="mt-6">
-          <Link 
-            href="/auth/admin"
-            className="text-sm text-red-600 hover:text-red-700 underline"
-          >
-            Admin Login
-          </Link>
-        </div>
       </div>
     </div>
   )

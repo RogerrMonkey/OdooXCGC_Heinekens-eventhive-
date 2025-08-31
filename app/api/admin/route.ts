@@ -103,11 +103,29 @@ export async function GET(req: Request) {
       newUsersThisMonth
     };
 
+    // Get pending role upgrade requests
+    const roleUpgradeRequests = await prisma.roleUpgradeRequest.findMany({
+      where: { status: 'PENDING' },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            role: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
     return NextResponse.json({
       ok: true,
       users,
       events,
-      stats
+      stats,
+      roleUpgradeRequests
     });
 
   } catch (error) {
@@ -201,7 +219,7 @@ export async function PATCH(req: Request) {
   }
 }
 
-// Delete user (soft delete by changing role)
+// Delete user (soft delete by changing role) or delete event
 export async function DELETE(req: Request) {
   const adminId = await verifyAdminAccess(req);
   
@@ -215,29 +233,69 @@ export async function DELETE(req: Request) {
     const eventId = searchParams.get('eventId');
 
     if (userId) {
-      // Suspend user by updating their role
-      await prisma.user.update({
+      // Suspend user by updating their role to ATTENDEE
+      const updatedUser = await prisma.user.update({
         where: { id: userId },
-        data: { role: 'ATTENDEE' } // Demote to basic attendee
+        data: { role: 'ATTENDEE' },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true
+        }
       });
 
       return NextResponse.json({
         ok: true,
-        message: "User suspended successfully"
+        message: "User suspended successfully",
+        user: updatedUser
       });
     }
 
     if (eventId) {
-      // Cancel event
-      await prisma.event.update({
-        where: { id: eventId },
-        data: { status: 'CANCELLED' }
+      // First check if event has bookings
+      const bookingsCount = await prisma.booking.count({
+        where: { 
+          ticket: {
+            eventId: eventId
+          }
+        }
       });
 
-      return NextResponse.json({
-        ok: true,
-        message: "Event cancelled successfully"
-      });
+      if (bookingsCount > 0) {
+        // If event has bookings, just cancel it instead of deleting
+        const updatedEvent = await prisma.event.update({
+          where: { id: eventId },
+          data: { status: 'CANCELLED' },
+          select: {
+            id: true,
+            title: true,
+            status: true
+          }
+        });
+
+        return NextResponse.json({
+          ok: true,
+          message: "Event cancelled (has existing bookings)",
+          event: updatedEvent
+        });
+      } else {
+        // If no bookings, safe to delete
+        // First delete related ticket types
+        await prisma.ticketType.deleteMany({
+          where: { eventId: eventId }
+        });
+
+        // Then delete the event
+        await prisma.event.delete({
+          where: { id: eventId }
+        });
+
+        return NextResponse.json({
+          ok: true,
+          message: "Event deleted successfully"
+        });
+      }
     }
 
     return NextResponse.json({ error: "User ID or Event ID required" }, { status: 400 });
